@@ -1,0 +1,15 @@
+# OPAM Dashboard Requirements - Python 3.14 Compatible
+# Install with: pip install -r dashboard_requirements_py314.txt
+
+# Core dashboard
+streamlit>=1.28.0
+
+# Data processing - use latest versions for Python 3.14
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Visualization
+plotly>=5.17.0
+
+# Date/time handling
+python-dateutil>=2.8.2
