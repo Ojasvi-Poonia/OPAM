@@ -9,7 +9,7 @@ import sys
 # Configure page
 st.set_page_config(
     page_title="OPAM - Expense Prediction Dashboard",
-    page_icon="💰",
+    page_icon="OPAM",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -52,7 +52,7 @@ def load_data():
                 df = pd.read_csv(path)
                 df['date'] = pd.to_datetime(df['date'])
                 data['transactions'] = df
-                st.sidebar.success(f"✅ Loaded {len(df):,} transactions from {path}")
+                st.sidebar.success(f"Loaded {len(df):,} transactions from {path}")
                 break
             except Exception as e:
                 st.sidebar.error(f"Error reading {path}: {e}")
@@ -113,12 +113,12 @@ def load_data():
 
 def show_overview(data):
     """Display overview page"""
-    st.markdown('<p class="main-header">💰 OPAM Expense Prediction Dashboard</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">OPAM Expense Prediction Dashboard</p>', unsafe_allow_html=True)
     st.markdown("---")
     
     if 'transactions' not in data or data['transactions'] is None:
-        st.error("⚠️ No transaction data found!")
-        st.info("📍 Debug Info:")
+        st.error("No transaction data found.")
+        st.info("Debug Information:")
         st.write(f"Current directory: {os.getcwd()}")
         st.write(f"Files in current directory: {os.listdir('.')}")
         if os.path.exists('data'):
@@ -143,7 +143,7 @@ def show_overview(data):
     
     with col4:
         categories = df['category'].nunique()
-        st.metric("Categories", categories)
+        st.metric("Number of Categories", categories)
     
     st.markdown("---")
     
@@ -151,7 +151,7 @@ def show_overview(data):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📈 Monthly Spending Trend")
+        st.subheader("Monthly Spending Trend")
         monthly = df.groupby(df['date'].dt.to_period('M'))['amount'].sum().reset_index()
         monthly['date'] = monthly['date'].astype(str)
         
@@ -162,7 +162,7 @@ def show_overview(data):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.subheader("🎯 Category Distribution")
+        st.subheader("Category Distribution")
         category_dist = df.groupby('category')['amount'].sum().sort_values(ascending=False).head(10)
         
         fig = px.pie(values=category_dist.values, names=category_dist.index,
@@ -170,17 +170,17 @@ def show_overview(data):
         st.plotly_chart(fig, use_container_width=True)
     
     # Recent transactions
-    st.subheader("📋 Recent Transactions")
+    st.subheader("Recent Transactions")
     recent = df.sort_values('date', ascending=False).head(10)
     st.dataframe(recent[['date', 'amount', 'category', 'merchant', 'description']], use_container_width=True)
 
 def show_predictions(data):
     """Display predictions page"""
-    st.markdown('<p class="main-header">🔮 Expense Predictions</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Expense Predictions</p>', unsafe_allow_html=True)
     
     if 'predictions' not in data:
-        st.warning("⚠️ No prediction data available. Run the ML models to generate predictions.")
-        st.info("Run: `cd model && python3 expense_predictor.py`")
+        st.warning("No prediction data available. Run the ML models to generate predictions.")
+        st.info("Run: cd model && python3 expense_predictor.py")
         return
     
     pred_df = data['predictions']
@@ -194,16 +194,16 @@ def show_predictions(data):
         st.metric("Confidence Level", "High")
     
     st.markdown("---")
-    st.subheader("📊 Prediction Results")
+    st.subheader("Prediction Results")
     st.dataframe(pred_df.head(20), use_container_width=True)
 
 def show_budget(data):
     """Display budget recommendations"""
-    st.markdown('<p class="main-header">💡 Budget Recommendations</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Budget Recommendations</p>', unsafe_allow_html=True)
     
     if 'budget' not in data:
-        st.warning("⚠️ No budget data available. Run the budget recommender to generate recommendations.")
-        st.info("Run: `cd model && python3 budget_recommender.py`")
+        st.warning("No budget data available. Run the budget recommender to generate recommendations.")
+        st.info("Run: cd model && python3 budget_recommender.py")
         return
     
     budget_df = data['budget']
@@ -211,11 +211,11 @@ def show_budget(data):
 
 def show_fraud(data):
     """Display fraud detection"""
-    st.markdown('<p class="main-header">🔒 Fraud Detection</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Fraud Detection</p>', unsafe_allow_html=True)
     
     if 'fraud' not in data:
-        st.warning("⚠️ No fraud detection data available. Run the fraud detector.")
-        st.info("Run: `cd model && python3 fraud_detector.py`")
+        st.warning("No fraud detection data available. Run the fraud detector.")
+        st.info("Run: cd model && python3 fraud_detector.py")
         return
     
     fraud_df = data['fraud']
@@ -235,10 +235,10 @@ def show_fraud(data):
 
 def show_anomalies(data):
     """Display anomaly detection"""
-    st.markdown('<p class="main-header">⚠️ Anomaly Detection</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Anomaly Detection</p>', unsafe_allow_html=True)
     
     if 'anomalies' not in data:
-        st.warning("⚠️ No anomaly data available.")
+        st.warning("No anomaly data available.")
         return
     
     anomaly_df = data['anomalies']
@@ -246,10 +246,10 @@ def show_anomalies(data):
 
 def show_clusters(data):
     """Display user clusters"""
-    st.markdown('<p class="main-header">👥 User Segments</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">User Segmentation</p>', unsafe_allow_html=True)
     
     if 'clusters' not in data:
-        st.warning("⚠️ No cluster data available.")
+        st.warning("No cluster data available.")
         return
     
     cluster_df = data['clusters']
@@ -257,16 +257,16 @@ def show_clusters(data):
 
 def show_analytics(data):
     """Display advanced analytics"""
-    st.markdown('<p class="main-header">📊 Advanced Analytics</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">Advanced Analytics</p>', unsafe_allow_html=True)
     
     if 'transactions' not in data:
-        st.error("⚠️ No transaction data available for analytics.")
+        st.error("No transaction data available for analytics.")
         return
     
     df = data['transactions']
     
     # Time-based analysis
-    st.subheader("⏰ Time-based Analysis")
+    st.subheader("Time-based Analysis")
     df['hour'] = pd.to_datetime(df['date']).dt.hour
     df['day_of_week'] = pd.to_datetime(df['date']).dt.day_name()
     
@@ -290,28 +290,28 @@ def main():
     """Main application"""
     
     # Sidebar
-    st.sidebar.title("📊 Navigation")
+    st.sidebar.title("Navigation")
     st.sidebar.markdown("---")
     
-    # Show current directory info
-    with st.sidebar.expander("🔍 Debug Info"):
-        st.write(f"Working dir: {os.getcwd()}")
-        st.write(f"Script dir: {os.path.dirname(os.path.abspath(__file__))}")
+    # Debug info
+    with st.sidebar.expander("Debug Information"):
+        st.write(f"Working directory: {os.getcwd()}")
+        st.write(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
     
     pages = {
-        "🏠 Overview": show_overview,
-        "🔮 Predictions": show_predictions,
-        "💡 Budget": show_budget,
-        "🔒 Fraud Detection": show_fraud,
-        "⚠️ Anomalies": show_anomalies,
-        "👥 User Segments": show_clusters,
-        "📊 Analytics": show_analytics
+        "Overview": show_overview,
+        "Predictions": show_predictions,
+        "Budget": show_budget,
+        "Fraud Detection": show_fraud,
+        "Anomalies": show_anomalies,
+        "User Segments": show_clusters,
+        "Analytics": show_analytics
     }
     
-    selection = st.sidebar.radio("Go to", list(pages.keys()))
+    selection = st.sidebar.radio("Go to:", list(pages.keys()))
     
     st.sidebar.markdown("---")
-    st.sidebar.info("💡 **Tip**: Use the navigation above to explore different features!")
+    st.sidebar.info("Use the navigation above to explore different features.")
     
     # Load data
     with st.spinner("Loading data..."):
@@ -326,3 +326,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
