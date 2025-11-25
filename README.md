@@ -1,6 +1,6 @@
 # OPAM - Expense Prediction System
 
-A comprehensive AI-powered expense prediction and analysis platform using ensemble machine learning for financial forecasting and management.
+A comprehensive AI-powered expense prediction and analysis platform using ensemble machine learning for financial forecasting and Management.
 
 ## Overview
 
@@ -9,6 +9,7 @@ OPAM (Optimized Prediction and Analysis of Monthly Expenses) is a full-stack exp
 ## Features
 
 ### Machine Learning Models
+
 - 6 ensemble ML models: Linear Regression, Ridge, Random Forest, Gradient Boosting, XGBoost, and Ensemble
 - Time series analysis with lag features and rolling windows
 - 50+ engineered features from raw transaction data
@@ -16,6 +17,7 @@ OPAM (Optimized Prediction and Analysis of Monthly Expenses) is a full-stack exp
 - Statistical confidence intervals
 
 ### Analytics & Insights
+
 - Spending pattern analysis (daily, weekly, monthly)
 - Category and merchant intelligence
 - Anomaly detection using multiple algorithms
@@ -23,12 +25,14 @@ OPAM (Optimized Prediction and Analysis of Monthly Expenses) is a full-stack exp
 - Budget optimization with AI-powered recommendations
 
 ### Security & Fraud Detection
+
 - ML-based fraud scoring (0-100 scale)
 - Real-time risk assessment
 - Pattern recognition for suspicious transactions
 - Multi-level risk classification
 
 ### Dashboard
+
 - Interactive Streamlit web interface
 - Real-time data visualization with Plotly
 - Multiple analysis modules
@@ -68,6 +72,7 @@ opam/
 ## Installation
 
 ### Prerequisites
+
 - Python 3.11 or higher
 - pip package manager
 - Virtual environment (recommended)
@@ -133,14 +138,14 @@ This executes all modules: prediction, fraud detection, anomaly detection, clust
 
 ## ML Model Performance
 
-| Model | RMSE | R² Score | MAPE | Training Time |
-|-------|------|----------|------|---------------|
-| Linear Regression | ₹81,949 | 0.9792 | 1.49% | <1s |
-| Ridge Regression | ₹77,891 | 0.9812 | 1.57% | <1s |
-| Random Forest | ₹303,232 | 0.7155 | 6.31% | ~10s |
-| Gradient Boosting | ₹83,542 | 0.9784 | 1.68% | ~15s |
-| XGBoost | ₹550,783 | 0.0614 | 11.52% | ~20s |
-| Ensemble | ₹147,532 | 0.9327 | 2.55% | ~30s |
+| Model             | RMSE     | R² Score | MAPE   | Training Time |
+| ----------------- | -------- | -------- | ------ | ------------- |
+| Linear Regression | ₹81,949  | 0.9792   | 1.49%  | <1s           |
+| Ridge Regression  | ₹77,891  | 0.9812   | 1.57%  | <1s           |
+| Random Forest     | ₹303,232 | 0.7155   | 6.31%  | ~10s          |
+| Gradient Boosting | ₹83,542  | 0.9784   | 1.68%  | ~15s          |
+| XGBoost           | ₹550,783 | 0.0614   | 11.52% | ~20s          |
+| Ensemble          | ₹147,532 | 0.9327   | 2.55%  | ~30s          |
 
 Best Model: Ridge Regression (lowest RMSE)
 
@@ -149,18 +154,23 @@ Production Model: Ensemble (balanced performance)
 ## Key Components
 
 ### Expense Predictor
+
 Trains 6 ML models on historical transaction data to predict future monthly expenses with feature engineering, lag features, and rolling statistics.
 
 ### Fraud Detector
+
 Calculates fraud risk scores (0-100) for each transaction using multiple detection methods including time-based analysis, amount-based scoring, and pattern recognition.
 
 ### Anomaly Detector
+
 Identifies unusual transactions using statistical methods (Z-score), Isolation Forest, and high-value detection algorithms.
 
 ### Budget Recommender
+
 Generates personalized budget recommendations by category with savings opportunities and spending optimization strategies.
 
 ### User Clusterer
+
 Segments users into behavioral groups using K-Means clustering based on spending patterns, transaction frequency, and category preferences.
 
 ## Dashboard Pages
@@ -178,6 +188,7 @@ Segments users into behavioral groups using K-Means clustering based on spending
 ### Data Format
 
 The system expects CSV files with the following columns:
+
 - date: Transaction date (YYYY-MM-DD HH:MM:SS)
 - amount: Transaction amount (numeric)
 - category: Spending category (string)
@@ -189,6 +200,7 @@ The system expects CSV files with the following columns:
 ### Model Parameters
 
 Edit model parameters in respective Python files:
+
 - Number of estimators for tree-based models
 - Learning rate for gradient boosting
 - Number of clusters for user segmentation
@@ -197,6 +209,7 @@ Edit model parameters in respective Python files:
 ## Dependencies
 
 ### Core Requirements
+
 - pandas: Data manipulation
 - numpy: Numerical operations
 - scikit-learn: Machine learning models
@@ -205,6 +218,7 @@ Edit model parameters in respective Python files:
 - plotly: Interactive visualizations
 
 ### Optional Requirements
+
 - tensorflow: Deep learning (LSTM models)
 - lightgbm: Additional ML models
 - openpyxl: Excel export
@@ -250,6 +264,7 @@ This project is licensed under the MIT License. See LICENSE file for details.
 ## Acknowledgments
 
 Built with:
+
 - Streamlit - Dashboard framework
 - scikit-learn - Machine learning
 - XGBoost - Gradient boosting
