@@ -73,32 +73,81 @@ opam/
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.11 or 3.12 (recommended)
 - pip package manager
-- Virtual environment (recommended)
+- Virtual environment support
 
-### Quick Install
+> **⚠️ Important**: This project requires Python 3.11 or 3.12. Python 3.14 is not currently supported due to compatibility issues with PyArrow (a dependency of Streamlit). Pre-built wheels for PyArrow are not yet available for Python 3.14, which causes installation failures.
+
+### Setup
+
+1. Clone the repository:
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/opam.git
-cd opam
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements-minimal.txt
+git clone <repository-url>
+cd <project-directory>
 ```
 
-### Full Installation
+2. Create and activate virtual environment:
 
 ```bash
-# For all features including deep learning
+# Create virtual environment with Python 3.12 (recommended)
+python3.12 -m venv .venv
+
+# Or use Python 3.11
+python3.11 -m venv .venv
+
+# Activate virtual environment
+# On macOS/Linux:
+source .venv/bin/activate
+
+# On Windows:
+.venv\Scripts\activate
+```
+
+3. Upgrade pip and install dependencies:
+
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+### Troubleshooting Installation
+
+**Issue: PyArrow build failure**
+
+If you encounter an error like `ERROR: Failed building wheel for pyarrow`, ensure you're using Python 3.11 or 3.12:
+
+```bash
+# Check your Python version
+python --version
+
+# If using Python 3.14 or newer, recreate your virtual environment:
+deactivate
+rm -rf .venv
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+**Alternative Solution (macOS with Homebrew):**
+
+If you must use a newer Python version, install Apache Arrow C++ library first:
+
+```bash
+brew install apache-arrow
+export ARROW_HOME=$(brew --prefix apache-arrow)
+pip install -r requirements.txt
+```
+
+### Running the Dashboard
+
+```bash
+streamlit run opam_dashboard.py
+```
+
+Open browser to `http://localhost:8501`
 
 ## Usage
 
