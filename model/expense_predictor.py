@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.preprocessing import StandardScaler
@@ -22,6 +22,8 @@ class OPAMExpensePredictor:
         self.scalers = {}
         self.feature_columns = []
         self.category_models = {}
+        self.tuned_params = {}  # NEW: Store tuned parameters
+        self.tuning_results = {}  # NEW: Store tuning comparison results
         
     def print_header(self, text, char="="):
         """Print formatted header"""
@@ -116,9 +118,220 @@ class OPAMExpensePredictor:
         print(f"✓ Training samples: {len(monthly)}")
         
         return monthly
-    
-    def train_models(self, monthly_df):
-        """Train multiple ML models"""
+
+    def _print_metrics(self, model_name, y_true, y_pred):
+        """Print model metrics"""
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        mae = mean_absolute_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+        mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+        
+        print(f"  RMSE:  ₹{rmse:,.2f}")
+        print(f"  MAE:   ₹{mae:,.2f}")
+        print(f"  R²:    {r2:.4f} ({r2*100:.2f}% accuracy)")
+        print(f"  MAPE:  {mape:.2f}%")
+        
+        return {'rmse': rmse, 'mae': mae, 'r2': r2, 'mape': mape}
+
+    def _print_overfitting_check(self, y_train, pred_train, y_test, pred_test):
+        """Check for overfitting"""
+        r2_train = r2_score(y_train, pred_train)
+        r2_test = r2_score(y_test, pred_test)
+        gap = (r2_train - r2_test) * 100
+        
+        print(f"\n🔍 Overfitting Check:")
+        print(f"  Train R²: {r2_train:.4f} ({r2_train*100:.2f}%)")
+        print(f"  Test R²:  {r2_test:.4f} ({r2_test*100:.2f}%)")
+        print(f"  Gap:      {gap:.2f}%", end="")
+        
+        if gap < 2:
+            print(" ✅ Excellent - No overfitting")
+        elif gap < 5:
+            print(" ✅ Good - Minimal overfitting")
+        elif gap < 10:
+            print(" ⚠️  Moderate overfitting")
+        else:
+            print(" ❌ High overfitting - Model may not generalize well")
+        
+        return gap
+
+    # ============================================================================
+    # NEW: HYPERPARAMETER TUNING METHOD
+    # ============================================================================
+    def hyperparameter_tuning(self, X_train, y_train, cv_folds=3):
+        """
+        Perform hyperparameter tuning for all models using GridSearchCV/RandomizedSearchCV
+        Returns tuned models and best parameters
+        """
+        self.print_header("🔬 HYPERPARAMETER TUNING")
+        
+        tuned_models = {}
+        best_params = {}
+        tuning_times = {}
+        
+        import time
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # 1. Ridge Regression - GridSearchCV (small search space)
+        # ─────────────────────────────────────────────────────────────────────────
+        print("🔷 Tuning Ridge Regression...")
+        print("  Parameter grid: alpha = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]")
+        
+        ridge_param_grid = {
+            'alpha': [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+        }
+        
+        start_time = time.time()
+        ridge_grid = GridSearchCV(
+            Ridge(random_state=42),
+            param_grid=ridge_param_grid,
+            cv=cv_folds,
+            scoring='neg_mean_squared_error',
+            n_jobs=-1,
+            verbose=0
+        )
+        ridge_grid.fit(X_train, y_train)
+        tuning_times['Ridge'] = time.time() - start_time
+        
+        tuned_models['ridge'] = ridge_grid.best_estimator_
+        best_params['ridge'] = ridge_grid.best_params_
+        
+        print(f"  ✓ Best Parameters: {ridge_grid.best_params_}")
+        print(f"  ✓ Best CV Score (neg_MSE): {ridge_grid.best_score_:,.2f}")
+        print(f"  ✓ Time: {tuning_times['Ridge']:.2f}s")
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # 2. Random Forest - RandomizedSearchCV (larger search space)
+        # ─────────────────────────────────────────────────────────────────────────
+        print("\n🔷 Tuning Random Forest...")
+        print("  Parameter distributions:")
+        print("    - n_estimators: [50, 100, 150, 200, 250]")
+        print("    - max_depth: [3, 5, 7, 10, 15, 20, None]")
+        print("    - min_samples_split: [2, 5, 10]")
+        print("    - min_samples_leaf: [1, 2, 4]")
+        
+        rf_param_dist = {
+            'n_estimators': [50, 100, 150, 200, 250],
+            'max_depth': [3, 5, 7, 10, 15, 20, None],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'max_features': ['sqrt', 'log2', None]
+        }
+        
+        start_time = time.time()
+        rf_random = RandomizedSearchCV(
+            RandomForestRegressor(random_state=42, n_jobs=-1),
+            param_distributions=rf_param_dist,
+            n_iter=30,  # Try 30 random combinations
+            cv=cv_folds,
+            scoring='neg_mean_squared_error',
+            n_jobs=-1,
+            random_state=42,
+            verbose=0
+        )
+        rf_random.fit(X_train, y_train)
+        tuning_times['Random Forest'] = time.time() - start_time
+        
+        tuned_models['random_forest'] = rf_random.best_estimator_
+        best_params['random_forest'] = rf_random.best_params_
+        
+        print(f"  ✓ Best Parameters: {rf_random.best_params_}")
+        print(f"  ✓ Best CV Score (neg_MSE): {rf_random.best_score_:,.2f}")
+        print(f"  ✓ Time: {tuning_times['Random Forest']:.2f}s")
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # 3. Gradient Boosting - RandomizedSearchCV
+        # ─────────────────────────────────────────────────────────────────────────
+        print("\n🔷 Tuning Gradient Boosting...")
+        print("  Parameter distributions:")
+        print("    - n_estimators: [50, 100, 150, 200]")
+        print("    - learning_rate: [0.01, 0.05, 0.1, 0.2]")
+        print("    - max_depth: [3, 4, 5, 6, 7]")
+        
+        gb_param_dist = {
+            'n_estimators': [50, 100, 150, 200],
+            'learning_rate': [0.01, 0.05, 0.1, 0.2],
+            'max_depth': [3, 4, 5, 6, 7],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'subsample': [0.8, 0.9, 1.0]
+        }
+        
+        start_time = time.time()
+        gb_random = RandomizedSearchCV(
+            GradientBoostingRegressor(random_state=42),
+            param_distributions=gb_param_dist,
+            n_iter=30,
+            cv=cv_folds,
+            scoring='neg_mean_squared_error',
+            n_jobs=-1,
+            random_state=42,
+            verbose=0
+        )
+        gb_random.fit(X_train, y_train)
+        tuning_times['Gradient Boosting'] = time.time() - start_time
+        
+        tuned_models['gradient_boosting'] = gb_random.best_estimator_
+        best_params['gradient_boosting'] = gb_random.best_params_
+        
+        print(f"  ✓ Best Parameters: {gb_random.best_params_}")
+        print(f"  ✓ Best CV Score (neg_MSE): {gb_random.best_score_:,.2f}")
+        print(f"  ✓ Time: {tuning_times['Gradient Boosting']:.2f}s")
+        
+        # ─────────────────────────────────────────────────────────────────────────
+        # 4. XGBoost - RandomizedSearchCV
+        # ─────────────────────────────────────────────────────────────────────────
+        print("\n🔷 Tuning XGBoost...")
+        print("  Parameter distributions:")
+        print("    - n_estimators: [50, 100, 150, 200]")
+        print("    - learning_rate: [0.01, 0.05, 0.1, 0.2, 0.3]")
+        print("    - max_depth: [3, 4, 5, 6, 7, 8]")
+        
+        xgb_param_dist = {
+            'n_estimators': [50, 100, 150, 200],
+            'learning_rate': [0.01, 0.05, 0.1, 0.2, 0.3],
+            'max_depth': [3, 4, 5, 6, 7, 8],
+            'min_child_weight': [1, 3, 5],
+            'subsample': [0.7, 0.8, 0.9, 1.0],
+            'colsample_bytree': [0.7, 0.8, 0.9, 1.0],
+            'gamma': [0, 0.1, 0.2]
+        }
+        
+        start_time = time.time()
+        xgb_random = RandomizedSearchCV(
+            xgb.XGBRegressor(random_state=42, n_jobs=-1, verbosity=0),
+            param_distributions=xgb_param_dist,
+            n_iter=30,
+            cv=cv_folds,
+            scoring='neg_mean_squared_error',
+            n_jobs=-1,
+            random_state=42,
+            verbose=0
+        )
+        xgb_random.fit(X_train, y_train)
+        tuning_times['XGBoost'] = time.time() - start_time
+        
+        tuned_models['xgboost'] = xgb_random.best_estimator_
+        best_params['xgboost'] = xgb_random.best_params_
+        
+        print(f"  ✓ Best Parameters: {xgb_random.best_params_}")
+        print(f"  ✓ Best CV Score (neg_MSE): {xgb_random.best_score_:,.2f}")
+        print(f"  ✓ Time: {tuning_times['XGBoost']:.2f}s")
+        
+        # Summary
+        print("\n" + "─" * 80)
+        print("📊 HYPERPARAMETER TUNING SUMMARY")
+        print("─" * 80)
+        total_time = sum(tuning_times.values())
+        print(f"  Total tuning time: {total_time:.2f}s")
+        for model_name, t in tuning_times.items():
+            print(f"    {model_name}: {t:.2f}s")
+        
+        self.tuned_params = best_params
+        return tuned_models, best_params
+
+    def train_models(self, monthly_df, use_hyperparameter_tuning=True):
+        """Train multiple ML models with optional hyperparameter tuning"""
         self.print_header("🤖 MODEL TRAINING")
         
         monthly_df = monthly_df.iloc[6:]
@@ -149,130 +362,312 @@ class OPAMExpensePredictor:
         print(f"\n✓ Train Set: {len(X_train)} months")
         print(f"✓ Test Set: {len(X_test)} months")
         
-        predictions = {}
+        # ======================================================================
+        # PHASE 1: Train with DEFAULT (non-tuned) parameters
+        # ======================================================================
+        self.print_header("📊 PHASE 1: TRAINING WITH DEFAULT PARAMETERS")
         
-        # Linear Regression
+        default_results = {}
+        predictions_default_train = {}
+        predictions_default_test = {}
+        
+        # Linear Regression (no hyperparameters to tune)
         print("\n" + "─" * 80)
-        print("🔷 Training Linear Regression...")
+        print("🔷 Training Linear Regression (Default)...")
         lr = LinearRegression()
         lr.fit(X_train, y_train)
-        lr_pred = lr.predict(X_test)
-        predictions['Linear Regression'] = lr_pred
+        lr_pred_train = lr.predict(X_train)
+        lr_pred_test = lr.predict(X_test)
+        predictions_default_train['Linear Regression'] = lr_pred_train
+        predictions_default_test['Linear Regression'] = lr_pred_test
         self.models['linear'] = lr
-        self._print_metrics("Linear Regression", y_test, lr_pred)
         
-        # Ridge
+        print("\n📊 Test Performance:")
+        lr_metrics = self._print_metrics("Linear Regression", y_test, lr_pred_test)
+        default_results['Linear Regression'] = lr_metrics
+        
+        # Ridge with DEFAULT alpha=1.0
         print("\n" + "─" * 80)
-        print("🔷 Training Ridge Regression...")
-        ridge = Ridge(alpha=1.0, random_state=42)
-        ridge.fit(X_train, y_train)
-        ridge_pred = ridge.predict(X_test)
-        predictions['Ridge'] = ridge_pred
-        self.models['ridge'] = ridge
-        self._print_metrics("Ridge", y_test, ridge_pred)
+        print("🔷 Training Ridge Regression (Default: alpha=1.0)...")
+        ridge_default = Ridge(alpha=1.0, random_state=42)
+        ridge_default.fit(X_train, y_train)
+        ridge_pred_train = ridge_default.predict(X_train)
+        ridge_pred_test = ridge_default.predict(X_test)
+        predictions_default_train['Ridge'] = ridge_pred_train
+        predictions_default_test['Ridge'] = ridge_pred_test
         
-        # Random Forest
+        print("\n📊 Test Performance:")
+        ridge_metrics = self._print_metrics("Ridge", y_test, ridge_pred_test)
+        default_results['Ridge'] = ridge_metrics
+        
+        # Random Forest with DEFAULT parameters
         print("\n" + "─" * 80)
-        print("🔷 Training Random Forest...")
-        rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
-        rf.fit(X_train, y_train)
-        rf_pred = rf.predict(X_test)
-        predictions['Random Forest'] = rf_pred
-        self.models['random_forest'] = rf
-        self._print_metrics("Random Forest", y_test, rf_pred)
+        print("🔷 Training Random Forest (Default: n_estimators=100, max_depth=10)...")
+        rf_default = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+        rf_default.fit(X_train, y_train)
+        rf_pred_train = rf_default.predict(X_train)
+        rf_pred_test = rf_default.predict(X_test)
+        predictions_default_train['Random Forest'] = rf_pred_train
+        predictions_default_test['Random Forest'] = rf_pred_test
         
-        # Feature importance
-        feature_importance = pd.DataFrame({
-            'feature': feature_cols,
-            'importance': rf.feature_importances_
-        }).sort_values('importance', ascending=False).head(10)
+        print("\n📊 Test Performance:")
+        rf_metrics = self._print_metrics("Random Forest", y_test, rf_pred_test)
+        default_results['Random Forest'] = rf_metrics
         
-        print("\n🌟 Top 10 Important Features:")
-        for idx, row in feature_importance.iterrows():
-            print(f"  {row['feature']:30s} {row['importance']:.4f}")
-        
-        # Gradient Boosting
+        # Gradient Boosting with DEFAULT parameters
         print("\n" + "─" * 80)
-        print("🔷 Training Gradient Boosting...")
-        gb = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42)
-        gb.fit(X_train, y_train)
-        gb_pred = gb.predict(X_test)
-        predictions['Gradient Boosting'] = gb_pred
-        self.models['gradient_boosting'] = gb
-        self._print_metrics("Gradient Boosting", y_test, gb_pred)
+        print("🔷 Training Gradient Boosting (Default: n_estimators=100, lr=0.1, max_depth=5)...")
+        gb_default = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42)
+        gb_default.fit(X_train, y_train)
+        gb_pred_train = gb_default.predict(X_train)
+        gb_pred_test = gb_default.predict(X_test)
+        predictions_default_train['Gradient Boosting'] = gb_pred_train
+        predictions_default_test['Gradient Boosting'] = gb_pred_test
         
-        # XGBoost
+        print("\n📊 Test Performance:")
+        gb_metrics = self._print_metrics("Gradient Boosting", y_test, gb_pred_test)
+        default_results['Gradient Boosting'] = gb_metrics
+        
+        # XGBoost with DEFAULT parameters
         print("\n" + "─" * 80)
-        print("🔷 Training XGBoost...")
-        xgb_model = xgb.XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42, n_jobs=-1)
-        xgb_model.fit(X_train, y_train)
-        xgb_pred = xgb_model.predict(X_test)
-        predictions['XGBoost'] = xgb_pred
-        self.models['xgboost'] = xgb_model
-        self._print_metrics("XGBoost", y_test, xgb_pred)
+        print("🔷 Training XGBoost (Default: n_estimators=100, lr=0.1, max_depth=6)...")
+        xgb_default = xgb.XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42, n_jobs=-1)
+        xgb_default.fit(X_train, y_train)
+        xgb_pred_train = xgb_default.predict(X_train)
+        xgb_pred_test = xgb_default.predict(X_test)
+        predictions_default_train['XGBoost'] = xgb_pred_train
+        predictions_default_test['XGBoost'] = xgb_pred_test
         
-        # Ensemble
+        print("\n📊 Test Performance:")
+        xgb_metrics = self._print_metrics("XGBoost", y_test, xgb_pred_test)
+        default_results['XGBoost'] = xgb_metrics
+        
+        # Default Ensemble
+        ensemble_default_train = (
+            lr_pred_train * 0.1 + ridge_pred_train * 0.1 + 
+            rf_pred_train * 0.25 + gb_pred_train * 0.25 + xgb_pred_train * 0.3
+        )
+        ensemble_default_test = (
+            lr_pred_test * 0.1 + ridge_pred_test * 0.1 + 
+            rf_pred_test * 0.25 + gb_pred_test * 0.25 + xgb_pred_test * 0.3
+        )
+        predictions_default_train['Ensemble'] = ensemble_default_train
+        predictions_default_test['Ensemble'] = ensemble_default_test
+        
         print("\n" + "─" * 80)
-        print("🔷 Creating Ensemble Model...")
-        ensemble_pred = (lr_pred * 0.1 + ridge_pred * 0.1 + rf_pred * 0.25 + gb_pred * 0.25 + xgb_pred * 0.3)
-        predictions['Ensemble'] = ensemble_pred
-        self._print_metrics("Ensemble", y_test, ensemble_pred)
+        print("🔷 Ensemble (Default)...")
+        print("\n📊 Test Performance:")
+        ensemble_metrics = self._print_metrics("Ensemble", y_test, ensemble_default_test)
+        default_results['Ensemble'] = ensemble_metrics
         
-        # Model comparison
-        self.print_header("📊 MODEL COMPARISON")
+        # ======================================================================
+        # PHASE 2: HYPERPARAMETER TUNING (if enabled)
+        # ======================================================================
+        tuned_results = {}
+        predictions_tuned_train = {}
+        predictions_tuned_test = {}
         
-        comparison = []
-        for name, pred in predictions.items():
-            rmse = np.sqrt(mean_squared_error(y_test, pred))
-            mae = mean_absolute_error(y_test, pred)
-            r2 = r2_score(y_test, pred)
-            mape = mean_absolute_percentage_error(y_test, pred) * 100
+        if use_hyperparameter_tuning:
+            # Perform hyperparameter tuning
+            tuned_models, best_params = self.hyperparameter_tuning(X_train, y_train, cv_folds=3)
             
-            comparison.append({
-                'Model': name,
-                'RMSE': f'₹{rmse:,.2f}',
-                'MAE': f'₹{mae:,.2f}',
-                'R² Score': f'{r2:.4f}',
-                'MAPE': f'{mape:.2f}%'
-            })
+            self.print_header("📊 PHASE 2: TRAINING WITH TUNED PARAMETERS")
+            
+            # Linear Regression (same as before - no tuning needed)
+            predictions_tuned_train['Linear Regression'] = lr_pred_train
+            predictions_tuned_test['Linear Regression'] = lr_pred_test
+            tuned_results['Linear Regression'] = lr_metrics
+            
+            # Ridge with TUNED parameters
+            print("\n" + "─" * 80)
+            print(f"🔷 Ridge Regression (Tuned: {best_params['ridge']})...")
+            ridge_tuned = tuned_models['ridge']
+            ridge_tuned_pred_train = ridge_tuned.predict(X_train)
+            ridge_tuned_pred_test = ridge_tuned.predict(X_test)
+            predictions_tuned_train['Ridge'] = ridge_tuned_pred_train
+            predictions_tuned_test['Ridge'] = ridge_tuned_pred_test
+            self.models['ridge'] = ridge_tuned
+            
+            print("\n📊 Test Performance:")
+            ridge_tuned_metrics = self._print_metrics("Ridge", y_test, ridge_tuned_pred_test)
+            tuned_results['Ridge'] = ridge_tuned_metrics
+            
+            # Random Forest with TUNED parameters
+            print("\n" + "─" * 80)
+            print(f"🔷 Random Forest (Tuned: {best_params['random_forest']})...")
+            rf_tuned = tuned_models['random_forest']
+            rf_tuned_pred_train = rf_tuned.predict(X_train)
+            rf_tuned_pred_test = rf_tuned.predict(X_test)
+            predictions_tuned_train['Random Forest'] = rf_tuned_pred_train
+            predictions_tuned_test['Random Forest'] = rf_tuned_pred_test
+            self.models['random_forest'] = rf_tuned
+            
+            print("\n📊 Test Performance:")
+            rf_tuned_metrics = self._print_metrics("Random Forest", y_test, rf_tuned_pred_test)
+            tuned_results['Random Forest'] = rf_tuned_metrics
+            
+            # Feature importance from tuned RF
+            feature_importance = pd.DataFrame({
+                'feature': feature_cols,
+                'importance': rf_tuned.feature_importances_
+            }).sort_values('importance', ascending=False).head(10)
+            
+            print("\n🌟 Top 10 Important Features (Tuned RF):")
+            for idx, row in feature_importance.iterrows():
+                print(f"  {row['feature']:30s} {row['importance']:.4f}")
+            
+            # Gradient Boosting with TUNED parameters
+            print("\n" + "─" * 80)
+            print(f"🔷 Gradient Boosting (Tuned: {best_params['gradient_boosting']})...")
+            gb_tuned = tuned_models['gradient_boosting']
+            gb_tuned_pred_train = gb_tuned.predict(X_train)
+            gb_tuned_pred_test = gb_tuned.predict(X_test)
+            predictions_tuned_train['Gradient Boosting'] = gb_tuned_pred_train
+            predictions_tuned_test['Gradient Boosting'] = gb_tuned_pred_test
+            self.models['gradient_boosting'] = gb_tuned
+            
+            print("\n📊 Test Performance:")
+            gb_tuned_metrics = self._print_metrics("Gradient Boosting", y_test, gb_tuned_pred_test)
+            tuned_results['Gradient Boosting'] = gb_tuned_metrics
+            
+            # XGBoost with TUNED parameters
+            print("\n" + "─" * 80)
+            print(f"🔷 XGBoost (Tuned: {best_params['xgboost']})...")
+            xgb_tuned = tuned_models['xgboost']
+            xgb_tuned_pred_train = xgb_tuned.predict(X_train)
+            xgb_tuned_pred_test = xgb_tuned.predict(X_test)
+            predictions_tuned_train['XGBoost'] = xgb_tuned_pred_train
+            predictions_tuned_test['XGBoost'] = xgb_tuned_pred_test
+            self.models['xgboost'] = xgb_tuned
+            
+            print("\n📊 Test Performance:")
+            xgb_tuned_metrics = self._print_metrics("XGBoost", y_test, xgb_tuned_pred_test)
+            tuned_results['XGBoost'] = xgb_tuned_metrics
+            
+            # Tuned Ensemble
+            ensemble_tuned_train = (
+                lr_pred_train * 0.1 + ridge_tuned_pred_train * 0.1 + 
+                rf_tuned_pred_train * 0.25 + gb_tuned_pred_train * 0.25 + xgb_tuned_pred_train * 0.3
+            )
+            ensemble_tuned_test = (
+                lr_pred_test * 0.1 + ridge_tuned_pred_test * 0.1 + 
+                rf_tuned_pred_test * 0.25 + gb_tuned_pred_test * 0.25 + xgb_tuned_pred_test * 0.3
+            )
+            predictions_tuned_train['Ensemble'] = ensemble_tuned_train
+            predictions_tuned_test['Ensemble'] = ensemble_tuned_test
+            
+            print("\n" + "─" * 80)
+            print("🔷 Ensemble (Tuned)...")
+            print("\n📊 Test Performance:")
+            ensemble_tuned_metrics = self._print_metrics("Ensemble", y_test, ensemble_tuned_test)
+            tuned_results['Ensemble'] = ensemble_tuned_metrics
+            
+            # ======================================================================
+            # PHASE 3: BEFORE vs AFTER COMPARISON
+            # ======================================================================
+            self.print_header("📊 BEFORE vs AFTER HYPERPARAMETER TUNING COMPARISON")
+            
+            print("┌" + "─" * 98 + "┐")
+            print(f"│ {'Model':<20} │ {'Metric':<8} │ {'Before (Default)':<18} │ {'After (Tuned)':<18} │ {'Improvement':<15} │")
+            print("├" + "─" * 98 + "┤")
+            
+            for model_name in ['Ridge', 'Random Forest', 'Gradient Boosting', 'XGBoost', 'Ensemble']:
+                before = default_results[model_name]
+                after = tuned_results[model_name]
+                
+                # RMSE comparison (lower is better)
+                rmse_before = before['rmse']
+                rmse_after = after['rmse']
+                rmse_improvement = ((rmse_before - rmse_after) / rmse_before) * 100
+                rmse_symbol = "✅" if rmse_improvement > 0 else "❌"
+                
+                print(f"│ {model_name:<20} │ {'RMSE':<8} │ ₹{rmse_before:>15,.2f} │ ₹{rmse_after:>15,.2f} │ {rmse_improvement:>+10.2f}% {rmse_symbol} │")
+                
+                # R² comparison (higher is better)
+                r2_before = before['r2']
+                r2_after = after['r2']
+                r2_improvement = (r2_after - r2_before) * 100
+                r2_symbol = "✅" if r2_improvement > 0 else "❌"
+                
+                print(f"│ {'':<20} │ {'R²':<8} │ {r2_before:>17.4f} │ {r2_after:>17.4f} │ {r2_improvement:>+10.2f}% {r2_symbol} │")
+                
+                # MAPE comparison (lower is better)
+                mape_before = before['mape']
+                mape_after = after['mape']
+                mape_improvement = ((mape_before - mape_after) / mape_before) * 100 if mape_before != 0 else 0
+                mape_symbol = "✅" if mape_improvement > 0 else "❌"
+                
+                print(f"│ {'':<20} │ {'MAPE':<8} │ {mape_before:>16.2f}% │ {mape_after:>16.2f}% │ {mape_improvement:>+10.2f}% {mape_symbol} │")
+                print("├" + "─" * 98 + "┤")
+            
+            print("└" + "─" * 98 + "┘")
+            
+            # Summary statistics
+            print("\n" + "=" * 80)
+            print("📈 TUNING IMPACT SUMMARY")
+            print("=" * 80)
+            
+            total_rmse_improvement = 0
+            total_r2_improvement = 0
+            improved_models = 0
+            
+            for model_name in ['Ridge', 'Random Forest', 'Gradient Boosting', 'XGBoost', 'Ensemble']:
+                before = default_results[model_name]
+                after = tuned_results[model_name]
+                
+                rmse_imp = ((before['rmse'] - after['rmse']) / before['rmse']) * 100
+                r2_imp = (after['r2'] - before['r2']) * 100
+                
+                total_rmse_improvement += rmse_imp
+                total_r2_improvement += r2_imp
+                
+                if rmse_imp > 0:
+                    improved_models += 1
+            
+            avg_rmse_improvement = total_rmse_improvement / 5
+            avg_r2_improvement = total_r2_improvement / 5
+            
+            print(f"\n✓ Models improved: {improved_models}/5")
+            print(f"✓ Average RMSE improvement: {avg_rmse_improvement:+.2f}%")
+            print(f"✓ Average R² improvement: {avg_r2_improvement:+.2f}%")
+            
+            # Best model selection
+            best_model_name = min(tuned_results.keys(), key=lambda x: tuned_results[x]['rmse'])
+            best_model_metrics = tuned_results[best_model_name]
+            
+            print(f"\n🏆 BEST MODEL AFTER TUNING: {best_model_name}")
+            print(f"   RMSE: ₹{best_model_metrics['rmse']:,.2f}")
+            print(f"   R²: {best_model_metrics['r2']:.4f}")
+            print(f"   MAPE: {best_model_metrics['mape']:.2f}%")
+            
+            # Store for later use
+            self.tuning_results = {
+                'default': default_results,
+                'tuned': tuned_results,
+                'best_params': best_params
+            }
+            
+            # Use tuned predictions for return
+            final_predictions = predictions_tuned_test
+            
+        else:
+            # No tuning - use default models
+            self.models['ridge'] = ridge_default
+            self.models['random_forest'] = rf_default
+            self.models['gradient_boosting'] = gb_default
+            self.models['xgboost'] = xgb_default
+            final_predictions = predictions_default_test
         
-        comparison_df = pd.DataFrame(comparison)
-        print(comparison_df.to_string(index=False))
-        
+        # Store training history
         self.training_history = {
             'X_test': X_test,
             'y_test': y_test,
-            'predictions': predictions,
+            'predictions': final_predictions,
             'monthly_df': monthly_df
         }
         
-        return predictions
-    
-    def _print_metrics(self, model_name, y_true, y_pred):
-        """Print model metrics"""
-        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        mae = mean_absolute_error(y_true, y_pred)
-        r2 = r2_score(y_true, y_pred)
-        mape = mean_absolute_percentage_error(y_true, y_pred) * 100
-        
-        print(f"  RMSE:  ₹{rmse:,.2f}")
-        print(f"  MAE:   ₹{mae:,.2f}")
-        print(f"  R²:    {r2:.4f}")
-        print(f"  MAPE:  {mape:.2f}%")
-        
-        if rmse < 500:
-            accuracy = "Excellent"
-        elif rmse < 1000:
-            accuracy = "Very Good"
-        elif rmse < 2000:
-            accuracy = "Good"
-        elif rmse < 3000:
-            accuracy = "Fair"
-        else:
-            accuracy = "Needs Improvement"
-        
-        print(f"  Accuracy: {accuracy}")
-    
+        return final_predictions
+
     def predict_next_month(self, monthly_df):
         """Predict next month"""
         self.print_header("🔮 NEXT MONTH PREDICTION")
@@ -459,7 +854,7 @@ class OPAMExpensePredictor:
                 'confidence_score': round(prediction_result['confidence'] / 100, 4),
                 'lower_bound': round(prediction_result['lower_bound'] * variation, 2),
                 'upper_bound': round(prediction_result['upper_bound'] * variation, 2),
-                'model': 'Ensemble'
+                'model': 'Ensemble (Tuned)' if self.tuned_params else 'Ensemble'
             })
         
         # Save main predictions
@@ -491,19 +886,48 @@ class OPAMExpensePredictor:
             'date_range_end': df['date'].max().strftime('%Y-%m-%d'),
             'next_month_prediction': round(prediction_result['predicted_amount'], 2),
             'confidence_score': round(prediction_result['confidence'], 2),
-            'models_trained': len(self.models)
+            'models_trained': len(self.models),
+            'hyperparameter_tuning': 'Yes' if self.tuned_params else 'No'
         }
+        
+        # Add tuned parameters if available
+        if self.tuned_params:
+            for model_name, params in self.tuned_params.items():
+                metrics_data[f'best_params_{model_name}'] = str(params)
         
         metrics_df = pd.DataFrame([metrics_data])
         metrics_df.to_csv('../results/prediction_metrics.csv', index=False)
         print(f"✅ Saved metrics to: results/prediction_metrics.csv")
+        
+        # NEW: Save tuning comparison results
+        if self.tuning_results:
+            comparison_data = []
+            for model_name in self.tuning_results['default'].keys():
+                before = self.tuning_results['default'][model_name]
+                after = self.tuning_results['tuned'][model_name]
+                
+                comparison_data.append({
+                    'model': model_name,
+                    'rmse_before': round(before['rmse'], 2),
+                    'rmse_after': round(after['rmse'], 2),
+                    'rmse_improvement_%': round(((before['rmse'] - after['rmse']) / before['rmse']) * 100, 2),
+                    'r2_before': round(before['r2'], 4),
+                    'r2_after': round(after['r2'], 4),
+                    'r2_improvement_%': round((after['r2'] - before['r2']) * 100, 2),
+                    'mape_before': round(before['mape'], 2),
+                    'mape_after': round(after['mape'], 2)
+                })
+            
+            comparison_df = pd.DataFrame(comparison_data)
+            comparison_df.to_csv('../results/tuning_comparison.csv', index=False)
+            print(f"✅ Saved tuning comparison to: results/tuning_comparison.csv")
         
         print(f"\n📊 Dashboard files ready!")
 
 
 def main():
     print("\n" + "="*80)
-    print("  🚀 OPAM: Next Month Expense Predictor with Auto-Save")
+    print("  🚀 OPAM: Next Month Expense Predictor with Hyperparameter Tuning")
     print("="*80)
     
     predictor = OPAMExpensePredictor()
@@ -514,20 +938,24 @@ def main():
     df = predictor.load_and_prepare_data(df)
     df = predictor.engineer_features(df)
     monthly_df = predictor.create_monthly_features(df)
-    predictor.train_models(monthly_df)
+    
+    # Train with hyperparameter tuning enabled (set to False to disable)
+    predictor.train_models(monthly_df, use_hyperparameter_tuning=True)
+    
     prediction_result = predictor.predict_next_month(monthly_df)
     category_predictions = predictor.train_category_models(df)
     predictor.generate_insights(df, prediction_result, category_predictions)
     
-    # NEW: Save predictions to CSV
+    # Save predictions to CSV
     predictor.save_predictions_to_csv(df, monthly_df, prediction_result, category_predictions)
     
     predictor.print_header("✅ ANALYSIS COMPLETE")
     print("\n🎉 All predictions saved! Dashboard is ready to use.")
     print("\nNext steps:")
     print("  1. Check results/predictions.csv")
-    print("  2. Run: streamlit run opam_dashboard_fixed.py")
-    print("  3. View predictions on dashboard!")
+    print("  2. Check results/tuning_comparison.csv for before/after comparison")
+    print("  3. Run: streamlit run opam_dashboard_fixed.py")
+    print("  4. View predictions on dashboard!")
     print()
 
 if __name__ == "__main__":
